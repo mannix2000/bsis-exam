@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>BSIS Offline Exam — Enterprise Architecture</title>
+<style>
+  :root{--bg:#f6f8fb;--card:#ffffff;--accent:#1f6feb;--danger:#b00020;--muted:#6b7280}
+  *{box-sizing:border-box}body{font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:#0f172a}
+  header{background:var(--card);padding:16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 6px rgba(2,6,23,.06);position:sticky;top:0;z-index:10}
+  header h1{font-size:1.05rem;margin:0}header p{margin:0;color:var(--muted);font-size:.9rem}
+  main{max-width:900px;margin:20px auto;padding:12px}
+  .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 8px 20px rgba(2,6,23,.04);margin-bottom:12px}
+  label{display:block;margin-bottom:6px;font-weight:600}
+  input[type=text], textarea, select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-size:1rem}
+  textarea{min-height:110px;resize:vertical}
+  .muted{color:var(--muted);font-size:.95rem}
+  .timer{margin-left:auto;padding:8px 12px;border-radius:999px;background:#fff0f0;color:var(--danger);font-weight:700}
+  button{background:var(--accent);color:#fff;padding:10px 14px;border-radius:10px;border:0;font-weight:700}
+  button.secondary{background:#eef2ff;color:var(--accent);font-weight:600}
+  .hidden{display:none!important}
+  .warn{background:#fff7ed;border-left:4px solid #ffd8a8;padding:10px;border-radius:8px}
+  pre{background:#0b1220;color:#e6eef8;padding:12px;border-radius:8px;overflow:auto}
+  .score-bubble{display:inline-block;padding:6px 10px;border-radius:999px;background:#ecfdf5;color:#065f46;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>BSIS Offline Exam — Enterprise Architecture</h1>
+    <p class="muted">Based on: Understanding Enterprise Architecture Frameworks and Domains</p>
+  </div>
+  <div class="timer" id="timer">35:00</div>
+</header>
+
+<main>
+<section class="card warn">
+  <strong>Important:</strong> Do not minimize or switch apps. If you switch away, the exam will <strong>reset</strong> (answers cleared) while the <strong>timer continues</strong>.
+</section>
+
+<form id="examForm" class="card" autocomplete="off">
+  <label>Student Name (required)</label>
+  <input type="text" name="studentName" id="studentName" required placeholder="First Last"/>
+
+  <hr style="margin:12px 0">
+
+  <label>1. Define Enterprise Architecture in your own words. (2 pts)</label>
+  <textarea name="q1" id="q1" placeholder="Write your definition here..." required></textarea>
+
+  <label style="margin-top:12px">2. Identify and briefly describe two EA frameworks or methodologies (4 pts)</label>
+  <textarea name="q2" id="q2" placeholder="Example: TOGAF — provides ADM cycle...; Zachman — classification matrix..." required></textarea>
+
+  <label style="margin-top:12px">3. List four EA domains or layers and give one example for each. (4 pts)</label>
+  <textarea name="q3" id="q3" placeholder="Example: Business — enrollment; Data — student records; Application — online portal; Technology — servers" required></textarea>
+
+  <label style="margin-top:12px">4. Choose the correct domain order for TOGAF from the options below. (5 pts)</label>
+  <select name="q4" id="q4" required>
+    <option value="">-- Select the correct sequence --</option>
+    <option value="Business>Data>Application>Technology">Business &gt; Data &gt; Application &gt; Technology</option>
+    <option value="Business>Application>Data>Technology">Business &gt; Application &gt; Data &gt; Technology</option>
+    <option value="Technology>Application>Data>Business">Technology &gt; Application &gt; Data &gt; Business</option>
+  </select>
+
+  <label style="margin-top:12px">5. Write a short management plan (3–4 sentences) describing how you would apply the chosen framework in an organization. Include roles, steps, or viewpoints. (5 pts)</label>
+  <textarea name="q5" id="q5" placeholder="Mention EA manager, domain architects, ADM steps, governance, viewpoints..." required></textarea>
+
+  <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+    <button type="submit" id="submitBtn">Submit Exam</button>
+    <button type="button" class="secondary" id="downloadBtn" disabled>Download Answers (.txt)</button>
+    <div style="margin-left:auto" class="muted">Auto-scoring enabled for this exam</div>
+  </div>
+</form>
+
+<section id="result" class="card hidden">
+  <h3>✅ Exam Submitted</h3>
+  <p class="muted">Show this screen to your instructor or download the answers file.</p>
+  <p><strong>Student:</strong> <span id="resName"></span></p>
+  <p><strong>Time left:</strong> <span id="resTime"></span></p>
+  <p><strong>Auto-score:</strong> <span class="score-bubble" id="totalScore"></span> / 20</p>
+  <p class="muted">Breakdown:</p>
+  <ul id="breakdown"></ul>
+  <pre id="savedAnswers"></pre>
+</section>
+</main>
+
+<script>
+// Configurations
+const DURATION_MINUTES = 50;
+const COOLDOWN_MINUTES = 10;
+const form = document.getElementById('examForm');
+const timerEl = document.getElementById('timer');
+const result = document.getElementById('result');
+const resName = document.getElementById('resName');
+const resTime = document.getElementById('resTime');
+const totalScoreEl = document.getElementById('totalScore');
+const breakdownEl = document.getElementById('breakdown');
+const savedAnswers = document.getElementById('savedAnswers');
+const downloadBtn = document.getElementById('downloadBtn');
+
+// Check cooldown
+const lastSubmit = localStorage.getItem('lastSubmitTime');
+if(lastSubmit){
+  const remaining = parseInt(lastSubmit) + COOLDOWN_MINUTES*60*1000 - Date.now();
+  if(remaining > 0){
+    alert(`You have already submitted the exam. You can retake it in ${Math.ceil(remaining/60000)} minutes.`);
+    form.classList.add('hidden');
+    result.classList.remove('hidden');
+    resName.textContent = localStorage.getItem('lastStudentName') || 'Unknown';
+    totalScoreEl.textContent = localStorage.getItem('lastScore') || '0';
+    breakdownEl.innerHTML = localStorage.getItem('lastBreakdown') || '';
+    savedAnswers.textContent = localStorage.getItem('lastAnswers') || '';
+  }
+}
+
+// Timer persistence
+let endTime = localStorage.getItem('examEndTime');
+if(endTime) endTime = parseInt(endTime);
+else {
+  endTime = Date.now() + DURATION_MINUTES*60*1000;
+  localStorage.setItem('examEndTime', endTime);
+}
+
+// Timer display
+function fmt(ms){
+  const total = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(total/60);
+  const s = total % 60;
+  return m + ':' + (s<10?'0'+s:s);
+}
+
+function updateTimer(){
+  const remaining = endTime - Date.now();
+  timerEl.textContent = fmt(remaining);
+  if(remaining <=0){
+    clearInterval(timerInterval);
+    autoSubmit('Time is up. Auto-submitted.');
+    localStorage.removeItem('examEndTime');
+  }
+}
+const timerInterval = setInterval(updateTimer, 300);
+updateTimer();
+
+// Reset if minimized
+function resetToStart(){
+  form.reset();
+  window.scrollTo({top:0, behavior:'instant'});
+  alert('You left the exam. Exam reset to Question 1. Timer continues.');
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) resetToStart(); });
+
+// Scoring functions
+function score_q1(text){
+  const keywords=['blueprint','business','data','application','applications','technology','align'];
+  let matched = 0;
+  const t=text.toLowerCase();
+  keywords.forEach(k=>{if(t.includes(k)) matched++;});
+  return Math.min(2, Math.floor(matched/2));
+}
+function score_q2(text){
+  const frameworks=['togaf','zachman','feaf'];
+  const t=text.toLowerCase();
+  let names=frameworks.reduce((a,f)=>t.includes(f)?a+1:a,0);
+  names=Math.min(2,names);
+  const expl=['adm','method','methodology','classification','views','perspective'];
+  let explMatched=expl.reduce((a,k)=>t.includes(k)?a+1:a,0);
+  return Math.min(4,names+Math.min(2,Math.floor(explMatched/2)));
+}
+function score_q3(text){
+  const t=text.toLowerCase();
+  let count=0;
+  if(t.includes('business')) count++;
+  if(t.includes('data')) count++;
+  if(t.includes('application') || t.includes('applications')) count++;
+  if(t.includes('technology')) count++;
+  return Math.min(4,count);
+}
+function score_q4(val){ return val==='Business>Data>Application>Technology'?5:0; }
+function score_q5(text){
+  const t=text.toLowerCase();
+  const k=['role','roles','adm','govern','governance','stakeholder','stakeholders','implement','artifact','review','phase','step','architecture','architect'];
+  let matched=k.reduce((a,x)=>t.includes(x)?a+1:a,0);
+  if(matched>=6) return 5;
+  if(matched>=4) return 4;
+  if(matched>=3) return 3;
+  if(matched>=2) return 2;
+  if(matched>=1) return 1;
+  return 0;
+}
+
+// Auto score & show result
+function autoScoreAndShow(data, reason){
+  const q1=data.get('q1')||'', q2=data.get('q2')||'', q3=data.get('q3')||'', q4=data.get('q4')||'', q5=data.get('q5')||'';
+  const name=data.get('studentName')||'Unknown';
+  const s1=score_q1(q1), s2=score_q2(q2), s3=score_q3(q3), s4=score_q4(q4), s5=score_q5(q5);
+  const total=s1+s2+s3+s4+s5;
+
+  let out='== BSIS Offline Exam Answers ==\n';
+  out+='Student: '+name+'\n';
+  out+='Submitted at: '+new Date().toLocaleString()+'\n';
+  out+='Reason: '+reason+'\n\n';
+  out+='Q1: '+q1+'\n\n';
+  out+='Q2: '+q2+'\n\n';
+  out+='Q3: '+q3+'\n\n';
+  out+='Q4: '+q4+'\n\n';
+  out+='Q5: '+q5+'\n\n';
+  out+='SCORES\n';
+  out+='Q1: '+s1+'/2\nQ2: '+s2+'/4\nQ3: '+s3+'/4\nQ4: '+s4+'/5\nQ5: '+s5+'/5\nTOTAL: '+total+'/20\n';
+
+  form.classList.add('hidden');
+  result.classList.remove('hidden');
+  resName.textContent=name;
+  resTime.textContent=fmt(endTime-Date.now());
+  totalScoreEl.textContent=total.toString();
+
+  breakdownEl.innerHTML='';
+  [{k:'Definition (Q1)',v:s1+'/2'},{k:'Frameworks (Q2)',v:s2+'/4'},
+   {k:'Domains (Q3)',v:s3+'/4'},{k:'Diagram (Q4)',v:s4+'/5'},
+   {k:'Management plan (Q5)',v:s5+'/5'}].forEach(it=>{
+     const li=document.createElement('li');
+     li.textContent=`${it.k}: ${it.v}`;
+     breakdownEl.appendChild(li);
+  });
+
+  savedAnswers.textContent=out;
+  downloadBtn.disabled=false;
+  clearInterval(timerInterval);
+  window.__examOutput=out;
+
+  // Save for cooldown
+  localStorage.setItem('lastSubmitTime', Date.now());
+  localStorage.setItem('lastStudentName', name);
+  localStorage.setItem('lastScore', total);
+  localStorage.setItem('lastBreakdown', breakdownEl.innerHTML);
+  localStorage.setItem('lastAnswers', out);
+
+  localStorage.removeItem('examEndTime');
+}
+
+// Submission
+function autoSubmit(reason){
+  const formData=new FormData(form);
+  if(!formData.get('studentName')) formData.set('studentName','(no name)');
+  autoScoreAndShow(formData,reason);
+}
+
+form.addEventListener('submit', e=>{e.preventDefault(); autoSubmit('Submitted by user');});
+downloadBtn.addEventListener('click', ()=>{
+  const content=window.__examOutput||savedAnswers.textContent;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content], {type:'text/plain'}));
+  a.download=(document.getElementById('studentName').value||'student')+'_exam_answers.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+// Warn on close/refresh
+window.addEventListener('beforeunload', e=>{ e.preventDefault(); e.returnValue=''; });
+
+// Disable copy/paste in textareas and input
+['q1','q2','q3','q5','studentName'].forEach(id=>{
+  const el=document.getElementById(id);
+  ['paste','copy','cut','contextmenu'].forEach(ev=>el.addEventListener(ev,e=>e.preventDefault()));
+});
+
+// Disable global keys
+window.addEventListener('keydown', e=>{
+  if(e.ctrlKey||e.metaKey){
+    const banned=['c','v','x','s','u','p'];
+    if(banned.includes(e.key.toLowerCase())) e.preventDefault();
+  }
+  if(e.key==='F12') e.preventDefault();
+});
+document.addEventListener('contextmenu', e=>e.preventDefault());
+
+// Disable text selection and copy for the whole form (prevents copying questions)
+form.addEventListener('copy', e => e.preventDefault());
+form.addEventListener('cut', e => e.preventDefault());
+form.addEventListener('paste', e => e.preventDefault());
+form.addEventListener('contextmenu', e => e.preventDefault());
+form.addEventListener('selectstart', e => e.preventDefault());
+
+// Disable selection for all labels and headings (questions)
+document.querySelectorAll('label, h1, h3, p').forEach(el => {
+  el.style.userSelect = 'none'; // CSS way to prevent selection
+});
+
+</script>
+</body>
+</html>
